@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Testing parser</title>
+  <style>
+    #wrapper {
+      display: grid;
+      grid-template-areas:
+        "input-label output-label"
+        "input output"
+        "submit submit"
+      ;
+      grid-template-rows: 1fr 400px 1fr;
+      grid-template-columns: 1fr 1fr;
+      height: 500px;
+      width: 100%
+    }
+
+    #input-label {
+      grid-area: input-label;
+      background-color: antiquewhite;
+      text-align: center
+    }
+
+    #output-label {
+      grid-area: output-label;
+      background-color: antiquewhite;
+      text-align: center
+    }
+
+    #input {
+      grid-area: input
+    }
+
+    #output {
+      grid-area: output
+    }
+
+    #submit {
+      grid-area: submit
+    }
+
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div id="wrapper">
+      <span display="block" id="input-label">INPUT</span>
+      <textarea id="input"></textarea>
+      <span display="block" id="output-label">OUTPUT</span>
+      <div id="output"></div>
+      <!-- <textarea id="output" readonly></textarea> -->
+      <button type="button" id="submit">submit</button>
+    </div>
+  </div>
+  <script src="./script.js" type="module"></script>
+  <script>
+    const example = `def normalCircle circle(r: 20, cx: 30, cy: 30)
+
+svg(width: 400, height: 200) {
+  def biggerCircle normalCircle(r: radius => radius * 1.7)
+
+  biggerCircle(fill: 'red')
+  normalCircle(fill: 'blue')
+
+  normalCircle(
+    fill: 'green',
+    cx: parentX => parentX * 2,
+    cy: parentY => parentY * 2
+  )
+}`
+    document.getElementById('input').value = example
+
+  </script>
+</body>
+
+</html>
