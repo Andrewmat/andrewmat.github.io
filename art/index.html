@@ -20,6 +20,21 @@
       width: 100%
     }
 
+    @media (max-width: 768px) {
+      #wrapper {
+        grid-template-rows: 1fr 1fr 400px 1fr 400px;
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "submit"
+          "input-label"
+          "input"
+          "output-label"
+          "output"
+        ;
+        height: auto;
+      }
+    }
+
     #input-label {
       grid-area: input-label;
       background-color: antiquewhite;
@@ -43,7 +58,6 @@
     #submit {
       grid-area: submit
     }
-
   </style>
 </head>
 
@@ -54,29 +68,10 @@
       <textarea id="input"></textarea>
       <span display="block" id="output-label">OUTPUT</span>
       <div id="output"></div>
-      <!-- <textarea id="output" readonly></textarea> -->
       <button type="button" id="submit">submit</button>
     </div>
   </div>
-  <script src="./script.js" type="module"></script>
-  <script>
-    const example = `def normalCircle circle(r: 20, cx: 30, cy: 30)
-
-svg(width: 400, height: 200) {
-  def biggerCircle normalCircle(r: radius => radius * 1.7)
-
-  biggerCircle(fill: 'red')
-  normalCircle(fill: 'blue')
-
-  normalCircle(
-    fill: 'green',
-    cx: parentX => parentX * 2,
-    cy: parentY => parentY * 2
-  )
-}`
-    document.getElementById('input').value = example
-
-  </script>
+  <script src="art/script.js" type="module"></script>
 </body>
 
 </html>

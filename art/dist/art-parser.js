@@ -780,45 +780,36 @@ const node = (type, payload) => ({ type, payload });
 const strLimit = P.char("'");
 const betweenParenthesis = P.between(P.char('('))(P.char(')'));
 const betweenCurlyBrackets = P.between(P.char('{'))(P.char('}'));
+const betweenAngledBrackets = P.between(P.char('<'))(P.char('>'));
 
 var P$1 = P;
 
-const varNameParser = P$1.sequenceOf([
-  P$1.letter,
-  P$1.many(P$1.choice([P$1.letter, P$1.digits])).map(rs => rs.join('')),
-])
-  .map(rs => rs.join(''))
-  .map(r =>
-    node('var-name', {
-      native: false,
-      value: r,
-    })
-  );
+const varNameParser = P$1.choice([
+  betweenAngledBrackets(
+    P$1.many(P$1.choice([P$1.letters, P$1.digits, P$1.anyOfString('$#- ')])).map(rs =>
+      rs.join('')
+    )
+  ),
+  P$1.sequenceOf([
+    P$1.choice([P$1.letter]),
+    P$1.many(P$1.choice([P$1.letter, P$1.digits])).map(rs => rs.join('')),
+  ]).map(rs => rs.join('')),
+]).map(r =>
+  node('var-name', {
+    value: r,
+  })
+);
 
 const numberParser = P$1.sequenceOf([
   P$1.digits,
   P$1.possibly(P$1.sequenceOf([P$1.char('.'), P$1.digits]).map(rs => rs.join(''))),
 ])
   .map(rs => rs.join(''))
-  .map(r => {
-    console.log(r);
-    return node('number', { value: Number(r) })
-  });
+  .map(r => node('number', { value: Number(r) }));
 
 const stringParser = P$1.between(strLimit)(strLimit)(
   P$1.everythingUntil(strLimit)
 ).map(r => node('string', { value: r }));
-
-const nativeObjectNames = ['svg', 'circle', 'ellipse', 'line', 'rect', 'g'];
-
-const nativeObjectParser = P$1.choice(nativeObjectNames.map(s => P$1.str(s))).map(
-  r =>
-    node('var-name', {
-      native: true,
-      type: 'object',
-      value: r,
-    })
-);
 
 const operatorParser = P$1.choice([
   P$1.str('+'),
@@ -892,7 +883,7 @@ const blockParser = betweenCurlyBrackets(
 ).map(rs => node('block', { value: rs }));
 
 const objectParser = P$1.sequenceOf([
-  P$1.choice([nativeObjectParser, varNameParser]),
+  varNameParser,
   P$1.optionalWhitespace,
   P$1.possibly(attributesParser),
   P$1.optionalWhitespace,
@@ -977,7 +968,7 @@ const NODE_TYPES = {
 const RESOLVER_MAP = new Map([
   [NODE_TYPES.str, resolveString], // ✔️
   [NODE_TYPES.num, resolveNumber], // ✔️
-  [NODE_TYPES.varName, resolveVarName], // ✔️
+  [NODE_TYPES.varName, resolveName], // ✔️
   [NODE_TYPES.operator, resolveOperator], // ✔️
   [NODE_TYPES.val, resolveValue], // ✔️
   [NODE_TYPES.operation, resolveOperation], // ✔️
@@ -1008,20 +999,19 @@ function resolveNumber({ value }) {
   return Number(value)
 }
 
-function resolveVarName({ value, native, type }, context) {
-  if (native) {
-    return {
-      name: value,
-      attributes: [],
-      block: [],
-    }
-  }
-
+function resolveName({ value }, context) {
   if (!context.defs.has(value)) {
-    throw new Error(`Could not find definition of '${value}'`)
+    return undefined
   }
 
   return context.defs.get(value)
+}
+
+function resolveUndefinedName({ value }, context) {
+  if (context.defs.has(value)) {
+    throw new Error(`Expected ${value} to be undefined`)
+  }
+  return value
 }
 
 function resolveOperator({ value }) {
@@ -1067,7 +1057,7 @@ function resolveMapper({ args, operation }, context) {
       )
     }
     // TODO resolver of undefined name
-    return arg.payload.value
+    return resolveUndefinedName(arg.payload, context)
   });
   const defs = new Map(defNames.map((name, i) => [name, context.args[i]]));
   const mapperContext = mergeContext(context, { defs });
@@ -1121,13 +1111,19 @@ function resolveObject({ name, attributes, block }, context) {
   }
 
   const parent = resolveNode(name, context);
-  const attributesContext = mergeContext(context, {
-    parent,
-  });
+  if (!parent) {
+    // native object of the renderer
+    return {
+      name: resolveUndefinedName(name.payload, context),
+      attributes: resolveNode(attributes, context),
+      block: resolveNode(block, context),
+    }
+  }
+  const childrenContext = mergeContext(context, { parent });
   return {
     name: parent.name,
-    attributes: resolveNode(attributes, attributesContext),
-    block: resolveNode(block, context),
+    attributes: resolveNode(attributes, childrenContext),
+    block: resolveNode(block, childrenContext),
   }
 }
 
@@ -1152,7 +1148,8 @@ function resolveArgs(args) {
 }
 
 function resolveCommandDef([name, value], context) {
-  const definitionName = name.payload.value; // TODO resolver of undefined name
+  // TODO resolver of undefined name
+  const definitionName = resolveUndefinedName(name.payload, context);
   const definitionValue = resolveNode(value, context);
   context.defs.set(definitionName, definitionValue);
 }
@@ -1169,7 +1166,11 @@ function resolveCommandDraw([value], context) {
 
 function resolveBlock({ value }, context) {
   const blockContext = mergeContext(context, { defs: new Map() });
-  return value.map(node => resolveNode(node, blockContext)).filter(Boolean)
+  const parentBlock = context.parent.block || [];
+  const ownBlock = value
+    .map(node => resolveNode(node, blockContext))
+    .filter(Boolean);
+  return [...parentBlock, ...ownBlock]
 }
 
 function mergeContext(ourContext = {}, theirContext = {}) {
