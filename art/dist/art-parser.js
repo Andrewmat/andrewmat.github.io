@@ -811,6 +811,45 @@ const stringParser = P$1.between(strLimit)(strLimit)(
   P$1.everythingUntil(strLimit)
 ).map(r => node('string', { value: r }));
 
+const attributeParser = P$1.recursiveParser(() =>
+  P$1.sequenceOf([
+    varNameParser,
+    P$1.optionalWhitespace,
+    P$1.str(':'),
+    P$1.optionalWhitespace,
+    valueParser,
+  ])
+).map(rs =>
+  node('attribute', {
+    name: rs[0],
+    value: rs[4],
+  })
+);
+
+const attributesParser = betweenParenthesis(
+  P$1.sepBy(
+    P$1.sequenceOf([P$1.optionalWhitespace, P$1.char(','), P$1.optionalWhitespace])
+  )(attributeParser)
+).map(rs => node('attribute-list', { values: rs }));
+
+const blockParser = betweenCurlyBrackets(
+  P$1.recursiveParser(() => commandListParser)
+).map(rs => node('block', { value: rs }));
+
+const objectParser = P$1.sequenceOf([
+  varNameParser,
+  P$1.optionalWhitespace,
+  attributesParser,
+  P$1.optionalWhitespace,
+  P$1.possibly(blockParser),
+]).map(rs =>
+  node('object', {
+    name: rs[0],
+    attributes: rs[2] || node('attribute-list', { values: [] }),
+    block: rs[4] || node('block', { value: [] }),
+  })
+);
+
 const operatorParser = P$1.choice([
   P$1.str('+'),
   P$1.str('-'),
@@ -818,20 +857,26 @@ const operatorParser = P$1.choice([
   P$1.str('/'),
 ]).map(r => node('operator', { value: r }));
 
-const valueParser = P$1.choice([
-  P$1.recursiveParser(() => mapperParser),
-  numberParser,
-  stringParser,
-  varNameParser,
-]).map(r => node('value', { value: r }));
+const valueParser = P$1.recursiveParser(() =>
+  P$1.choice([
+    numberParser,
+    stringParser,
+    objectParser,
+    mapperParser,
+    operationParser,
+    varNameParser,
+  ])
+).map(r => node('value', { value: r }));
 
-const operationParser = P$1.sequenceOf([
-  valueParser,
-  P$1.optionalWhitespace,
-  operatorParser,
-  P$1.optionalWhitespace,
-  valueParser,
-]).map(rs =>
+const operationParser = betweenParenthesis(
+  P$1.sequenceOf([
+    valueParser,
+    P$1.optionalWhitespace,
+    operatorParser,
+    P$1.optionalWhitespace,
+    valueParser,
+  ])
+).map(rs =>
   node('operation', {
     leftArg: rs[0],
     operation: rs[2],
@@ -859,47 +904,10 @@ const mapperParser = P$1.sequenceOf([
   })
 );
 
-const attributeParser = P$1.sequenceOf([
-  P$1.letters,
-  P$1.optionalWhitespace,
-  P$1.str(':'),
-  P$1.optionalWhitespace,
-  valueParser,
-]).map(rs =>
-  node('attribute', {
-    name: rs[0],
-    value: rs[4],
-  })
-);
-
-const attributesParser = betweenParenthesis(
-  P$1.sepBy(
-    P$1.sequenceOf([P$1.optionalWhitespace, P$1.char(','), P$1.optionalWhitespace])
-  )(attributeParser)
-).map(rs => node('attribute-list', { value: rs }));
-
-const blockParser = betweenCurlyBrackets(
-  P$1.recursiveParser(() => commandListParser)
-).map(rs => node('block', { value: rs }));
-
-const objectParser = P$1.sequenceOf([
-  varNameParser,
-  P$1.optionalWhitespace,
-  P$1.possibly(attributesParser),
-  P$1.optionalWhitespace,
-  P$1.possibly(blockParser),
-]).map(rs =>
-  node('object', {
-    name: rs[0],
-    attributes: rs[2] || node('attribute-list', { values: [] }),
-    block: rs[4] || node('block', { value: [] }),
-  })
-);
-
 const defArgsParser = P$1.sequenceOf([
   varNameParser,
   P$1.whitespace,
-  objectParser,
+  valueParser,
 ]).map(r => node('args', [r[0], r[2]]));
 
 const drawArgsParser = objectParser.map(r => node('args', [r]));
@@ -1064,7 +1072,8 @@ function resolveMapper({ args, operation }, context) {
   return resolveNode(operation, mapperContext)
 }
 
-function resolveAttribute({ name, value }, context) {
+function resolveAttribute({ name: nameNode, value }, context) {
+  const name = nameNode.payload.value;
   const parentAttributes = (context.parent && context.parent.attributes) || [];
   // import same parent attribute to use in operations
   const parentAttribute = parentAttributes.find(
@@ -1080,9 +1089,9 @@ function resolveAttribute({ name, value }, context) {
   return [name, resolvedValue]
 }
 
-function resolveAttributeList({ value }, context) {
+function resolveAttributeList({ values }, context) {
   const parentAttributes = (context.parent && context.parent.attributes) || [];
-  const ownAttributes = value.map(attributeNode => {
+  const ownAttributes = values.map(attributeNode => {
     if (attributeNode.type !== NODE_TYPES.attr) {
       throw new Error(
         `Cannot resolve attribute of type '${attributeNode.type}'`

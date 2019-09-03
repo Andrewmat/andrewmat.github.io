@@ -3,10 +3,13 @@ import { artParser, artInterpreter, artSvgRenderer } from './dist/art-parser.js'
 const $ = document.querySelector.bind(document)
 
 const example = `
-def normalCircle circle(r: 20, cx: 30, cy: 30)
+def rad 20
+def radMargin 10
+def radBox (rad + radMargin)
+def normalCircle circle(r: rad, cx: radBox, cy: radBox)
 
 svg(width: 200, height: 200) {
-  def <bigger circle> normalCircle(r: radius => radius * 1.7)
+  def <bigger circle> normalCircle(r: radius => (radius * (1 + 0.5)))
 
   rect(
     fill: '#ccc',
@@ -24,8 +27,8 @@ svg(width: 200, height: 200) {
 
   normalCircle(
     fill: 'green',
-    cx: parentX => parentX * 3,
-    cy: parentY => parentY * 3
+    cx: parentX => (parentX * 3),
+    cy: parentY => (parentY * 3)
   )
 
   target()
