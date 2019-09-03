@@ -1212,7 +1212,11 @@ function createContext(initialContext) {
 
 const renderer = {
   render({ name, attributes, block }) {
-    const domElem = document.createElementNS('http://www.w3.org/2000/svg', name);
+    let domElem = document.createElement(name);
+    if (domElem instanceof HTMLUnknownElement) {
+      // tries svg instead
+      domElem = document.createElementNS('http://www.w3.org/2000/svg', name);
+    }
     attributes.forEach(([attrName, attrValue]) => {
       domElem.setAttribute(attrName, attrValue);
     });
@@ -1223,4 +1227,4 @@ const renderer = {
   },
 };
 
-export { artInterpreter, commandListParser as artParser, renderer as artSvgRenderer };
+export { renderer as artDomRenderer, artInterpreter, commandListParser as artParser };
